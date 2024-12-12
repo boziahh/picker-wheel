@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picker Wheel</title>
+    <link rel="icon" type="image/x-icon" href="/images/favicon-32x32.png">
+    <style>
+        body {
+            background-color: rgb(18, 18, 18);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #container {
+            display: flex;
+            gap: 20px;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        textarea {
+            width: 300px;
+            height: 500px;
+            resize: none;
+            font-size: 16px;
+            background-color: rgb(30, 30, 30);
+            color: white;
+            border: 1px solid rgb(70, 70, 70);
+            padding: 10px;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: rgb(100, 150, 255);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="myCanvas" width="500" height="500"></canvas>
+        <textarea id="textInput" placeholder="Enter sector text, one per line..."></textarea>
+    </div>
+
+    <script>
+        class Sector {
+            constructor(text, color) {
+                this.text = text;
+                this.color = color;
+            }
+
+            draw(ctx, centerX, centerY, radius, startAngle, angle) {
+                const endAngle = startAngle + angle;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.fill();
+
+                if (this.text) {
+                    const midAngle = startAngle + angle / 2;
+                    const textX = centerX + Math.cos(midAngle) * (radius - 30);
+                    const textY = centerY + Math.sin(midAngle) * (radius - 30);
+
+                    ctx.fillStyle = "white";
+                    const textWidth = ctx.measureText(this.text).width;
+
+                    const offsetX = -textWidth / 2;
+                    const offsetY = 0;
+
+                    ctx.save();
+                    ctx.translate(textX, textY);
+                    ctx.rotate(midAngle);
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(this.text, offsetX, offsetY);
+                    ctx.restore();
+                }
+            }
+        }
+        function getRandomFloat(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+        class Circle {
+            constructor(canvasId, radius, smallCircleRadius) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext("2d");
+                this.centerX = this.canvas.width / 2;
+                this.centerY = this.canvas.height / 2;
+                this.radius = radius;
+                this.smallCircleRadius = smallCircleRadius;
+                this.sectors = [];
+                this.colors = [
+                    "rgb(213, 15, 37)",
+                    "rgb(51, 105, 232)",
+                    "rgb(0, 153, 37)",
+                    "rgb(238, 178, 17)"
+                ];
+                this.problematicNumbers = [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49];
+                this.rotationAngle = 0;
+                this.velocity = 0;
+                this.isRotating = false;
+                this.animationFrameId = null;
+            }
+
+            shuffleColors() {
+                for (let i = this.colors.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.colors[i], this.colors[j]] = [this.colors[j], this.colors[i]];
+                }
+            }
+
+            assignColors(numSectors) {
+                const sectorColors = [];
+                this.shuffleColors();
+
+                let lastColor = null;
+
+                for (let i = 0; i < numSectors; i++) {
+                    let color;
+                    do {
+                        color = this.colors[i % this.colors.length];
+                    } while (color === lastColor);
+
+                    sectorColors.push(color);
+                    lastColor = color;
+                }
+
+                if (this.problematicNumbers.includes(numSectors)) {
+                    const lastColorIndex = sectorColors.length - 1;
+                    const firstColor = sectorColors[0];
+                    const secondLastColor = sectorColors[sectorColors.length - 2];
+                    const possibleColors = this.colors.filter(color => color !== firstColor && color !== secondLastColor);
+                    sectorColors[lastColorIndex] = possibleColors[Math.floor(Math.random() * possibleColors.length)];
+                }
+
+                return sectorColors;
+            }
+
+            addSectorsFromString(inputString) {
+                const lines = inputString.trim().split('\n');
+                this.sectors = [];
+
+                const sectorColors = this.assignColors(lines.length);
+
+                lines.forEach((line, index) => {
+                    this.sectors.push(new Sector(line, sectorColors[index]));
+                });
+
+                this.drawCircleSectors();
+            }
+            drawTriangle() {
+                const triangleHeight = 30;
+                const triangleBase = 30;
+
+                const topX = this.centerX;
+                const topY = this.centerY - this.radius - triangleHeight / 2;
+
+                this.ctx.shadowColor = "rgb(187, 187, 187)";
+                this.ctx.shadowBlur = 5;
+                this.ctx.fillStyle = "rgb(187, 187, 187)";
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(topX - triangleBase / 2, topY);
+                this.ctx.lineTo(topX + triangleBase / 2, topY);
+                this.ctx.lineTo(topX, topY + triangleHeight);
+                this.ctx.closePath();
+
+                this.ctx.fill();
+
+                this.ctx.shadowColor = "transparent";
+                this.ctx.shadowBlur = 0;
+            }
+            drawCircleSectors() {
+                const angle = 2 * Math.PI / this.sectors.length;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.font = "26px Arial";
+
+                for (let i = 0; i < this.sectors.length; i++) {
+                    const startAngle = this.rotationAngle + angle * i;
+                    this.sectors[i].draw(this.ctx, this.centerX, this.centerY, this.radius, startAngle, angle);
+                }
+
+                this.ctx.strokeStyle = "black";
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.arc(this.centerX, this.centerY, this.radius, 0, 2 * Math.PI);
+                this.ctx.stroke();
+
+                this.drawTriangle();
+
+                this.ctx.fillStyle = "white";
+                this.ctx.beginPath();
+                this.ctx.arc(this.centerX, this.centerY, this.smallCircleRadius, 0, 2 * Math.PI);
+                this.ctx.fill();
+            }
+            slowRotateTo(targetAngle, callback) {
+                const startAngle = this.rotationAngle % (2 * Math.PI);
+                const totalRotation = (targetAngle - startAngle + 2 * Math.PI) % (2 * Math.PI);
+                const duration = 2000;
+                const startTime = Date.now();
+                let velocity = 0.1;
+
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed < duration) {
+                        const progress = elapsed / duration;
+                        const easing = 1 - Math.pow(1 - progress, 3);
+                        this.rotationAngle = startAngle + totalRotation * easing;
+
+                        const distanceRemaining = targetAngle - this.rotationAngle;
+                        velocity = Math.max(0.1 * (distanceRemaining / totalRotation), 0.001);
+
+                        this.drawCircleSectors();
+                        requestAnimationFrame(animate);
+                    } else {
+                        this.rotationAngle = targetAngle;
+                        this.drawCircleSectors();
+                        if (callback) callback();
+                    }
+                };
+
+                animate();
+            }
+            startRotationFor3Seconds(targetSectorText) {
+                const startTime = Date.now();
+                this.velocity = 0.1;
+                this.isRotating = true;
+
+                const animate = () => {
+                    if (!this.isRotating) return;
+
+                    const timeElapsed = Date.now() - startTime;
+
+                    if (timeElapsed < 3000) {
+                        this.rotationAngle += this.velocity;
+                        this.velocity += 0.001;
+                    } else {
+                        if (this.velocity > 0.1) {
+                            this.velocity *= 0.98;
+                            this.rotationAngle += this.velocity;
+                        } else {
+                            this.velocity = 0;
+                            this.isRotating = false;
+                            this.stopAtSector(targetSectorText);
+                            return;
+                        }
+                    }
+
+                    this.drawCircleSectors();
+                    requestAnimationFrame(animate);
+                };
+                animate();
+            }
+            stopAtSector(sectorText) {
+                const normalizedText = sectorText.trim().toLowerCase();
+                const sectorIndex = this.sectors.findIndex(sector => sector.text === normalizedText);
+
+                if (sectorIndex !== -1) {
+                    const anglePerSector = 2 * Math.PI / this.sectors.length;
+                    const targetAngle = (Math.PI / 2) - (sectorIndex * anglePerSector) + ((anglePerSector/2)*(this.sectors.length-1));
+                    this.slowRotateTo(getRandomFloat((targetAngle+(anglePerSector/2)), (targetAngle-(anglePerSector/2))));
+                } else {
+                    
+                    console.error("Sector not found:", sectorText);
+                }
+            }
+        }
+
+        window.onload = function () {
+            const circle = new Circle("myCanvas", 220, 60);
+
+            const textInput = document.getElementById("textInput");
+            textInput.addEventListener("input", function () {
+                const multiLineText = textInput.value;
+                circle.addSectorsFromString(multiLineText);
+            });
+
+            circle.canvas.addEventListener("click", function () {
+                const lines = textInput.value.trim().split('\n');
+                if (lines.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * lines.length);
+                    circle.startRotationFor3Seconds(lines[randomIndex]);
+                }
+            });
+
+            window.addEventListener("keydown", function (event) {
+                if (event.ctrlKey && event.key === "y") {
+                    const lines = textInput.value.trim().split('\n');
+                    if (lines.length > 0) {
+                        circle.startRotationFor3Seconds(lines[0]);
+                    }
+                }
+            });
+
+            window.addEventListener("keydown", function (event) {
+                if (event.ctrlKey && event.key === "b") {
+                    const lines = textInput.value.trim().split('\n');
+                    if (lines.length > 0) {
+                        circle.startRotationFor3Seconds(lines[1]);
+                    }
+                }
+            });
+            const initialText = ``;
+            textInput.value = initialText;
+            circle.addSectorsFromString(initialText);
+        };
+    </script>
+</body>
+</html>
