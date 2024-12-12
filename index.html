@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Picker Wheel</title>
     <link rel="icon" type="image/x-icon" href="/images/favicon-32x32.png">
+    
     <style>
         body {
             background-color: rgb(18, 18, 18);
@@ -47,7 +48,9 @@
         <canvas id="myCanvas" width="500" height="500"></canvas>
         <textarea id="textInput" placeholder="Enter sector text, one per line..."></textarea>
     </div>
-
+    <audio id="sound1" src="sound/sound1.mp3" preload="auto"></audio>
+    <audio id="sound2" src="sound/sound2.mp3" preload="auto"></audio>
+    <script src="https://cdn.jsdelivr.net/npm/@simondmc/popup-js@1.4.3/popup.min.js"></script>
     <script>
         class Sector {
             constructor(text, color) {
@@ -200,12 +203,11 @@
                 this.ctx.arc(this.centerX, this.centerY, this.smallCircleRadius, 0, 2 * Math.PI);
                 this.ctx.fill();
             }
-            slowRotateTo(targetAngle, callback) {
+            slowRotateTo(targetAngle, sector, onStopCallback) {
                 const startAngle = this.rotationAngle % (2 * Math.PI);
                 const totalRotation = (targetAngle - startAngle + 2 * Math.PI) % (2 * Math.PI);
                 const duration = 2000;
                 const startTime = Date.now();
-                let velocity = 0.1;
 
                 const animate = () => {
                     const elapsed = Date.now() - startTime;
@@ -214,15 +216,14 @@
                         const easing = 1 - Math.pow(1 - progress, 3);
                         this.rotationAngle = startAngle + totalRotation * easing;
 
-                        const distanceRemaining = targetAngle - this.rotationAngle;
-                        velocity = Math.max(0.1 * (distanceRemaining / totalRotation), 0.001);
-
                         this.drawCircleSectors();
                         requestAnimationFrame(animate);
                     } else {
                         this.rotationAngle = targetAngle;
                         this.drawCircleSectors();
-                        if (callback) callback();
+                        if (typeof onStopCallback === "function") {
+                            onStopCallback(sector);
+                        }
                     }
                 };
 
@@ -260,15 +261,31 @@
             }
             stopAtSector(sectorText) {
                 const normalizedText = sectorText.trim().toLowerCase();
-                const sectorIndex = this.sectors.findIndex(sector => sector.text === normalizedText);
+                const sectorIndex = this.sectors.findIndex(sector => sector.text.toLowerCase() === normalizedText);
 
                 if (sectorIndex !== -1) {
                     const anglePerSector = 2 * Math.PI / this.sectors.length;
-                    const targetAngle = (Math.PI / 2) - (sectorIndex * anglePerSector) + ((anglePerSector/2)*(this.sectors.length-1));
-                    this.slowRotateTo(getRandomFloat((targetAngle+(anglePerSector/2)), (targetAngle-(anglePerSector/2))));
-                } else {
-                    
-                    console.error("Sector not found:", sectorText);
+                    const targetAngle = (Math.PI / 2) - (sectorIndex * anglePerSector) + ((anglePerSector / 2) * (this.sectors.length - 1));
+                    this.slowRotateTo(
+                        getRandomFloat(targetAngle + (anglePerSector / 2), targetAngle - (anglePerSector / 2)),
+                        sectorText,
+                        (stoppedSector) => {
+                            const myPopup = new Popup({
+                                id: "my-popup",
+                                title: "We have a winner!",
+                                content:sectorText,
+                                fontSizeMultiplier: 1.5,
+                                backgroundColor: "#1d1d1d",
+                                titleColor: "#ffffff",
+                                textColor: "#ffffff",
+                                closeColor: "#ffffff",
+                                borderWidth: "2px",
+                                borderColor: "#1d1d1d"
+                            });
+                            sound2.play()
+                            myPopup.show()
+                        }
+                    );
                 }
             }
         }
