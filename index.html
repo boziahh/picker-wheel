@@ -87,9 +87,11 @@
                 }
             }
         }
+
         function getRandomFloat(min, max) {
             return Math.random() * (max - min) + min;
         }
+
         class Circle {
             constructor(canvasId, radius, smallCircleRadius) {
                 this.canvas = document.getElementById(canvasId);
@@ -110,6 +112,9 @@
                 this.velocity = 0;
                 this.isRotating = false;
                 this.animationFrameId = null;
+
+                this.previousSectorIndex = -1; // Keep track of the previous sector
+                this.sound1 = document.getElementById("sound1"); // Reference to the sound element
             }
 
             shuffleColors() {
@@ -158,6 +163,7 @@
 
                 this.drawCircleSectors();
             }
+
             drawTriangle() {
                 const triangleHeight = 30;
                 const triangleBase = 30;
@@ -180,6 +186,7 @@
                 this.ctx.shadowColor = "transparent";
                 this.ctx.shadowBlur = 0;
             }
+
             drawCircleSectors() {
                 const angle = 2 * Math.PI / this.sectors.length;
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -202,7 +209,22 @@
                 this.ctx.beginPath();
                 this.ctx.arc(this.centerX, this.centerY, this.smallCircleRadius, 0, 2 * Math.PI);
                 this.ctx.fill();
+
+                this.checkSectorAlignment(); // Check for sector alignment with the pointer
             }
+
+            checkSectorAlignment() {
+                const anglePerSector = 2 * Math.PI / this.sectors.length;
+                const pointerAngle = (3 * Math.PI / 2 - this.rotationAngle) % (2 * Math.PI);
+                const normalizedPointerAngle = pointerAngle < 0 ? pointerAngle + 2 * Math.PI : pointerAngle;
+                const currentSectorIndex = Math.floor(normalizedPointerAngle / anglePerSector) % this.sectors.length;
+
+                if (currentSectorIndex !== this.previousSectorIndex) {
+                    this.previousSectorIndex = currentSectorIndex;
+                    this.sound1.play(); // Play sound when the sector changes
+                }
+            }
+
             slowRotateTo(targetAngle, sector, onStopCallback) {
                 const startAngle = this.rotationAngle % (2 * Math.PI);
                 const totalRotation = (targetAngle - startAngle + 2 * Math.PI) % (2 * Math.PI);
@@ -229,6 +251,7 @@
 
                 animate();
             }
+
             startRotationFor3Seconds(targetSectorText) {
                 const startTime = Date.now();
                 this.velocity = 0.1;
@@ -259,6 +282,7 @@
                 };
                 animate();
             }
+
             stopAtSector(sectorText) {
                 const normalizedText = sectorText.trim().toLowerCase();
                 const sectorIndex = this.sectors.findIndex(sector => sector.text.toLowerCase() === normalizedText);
